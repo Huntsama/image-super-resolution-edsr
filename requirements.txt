@@ -1,0 +1,9 @@
+torch
+torchvision
+lpips
+prettytable
+gdown
+numpy
+matplotlib
+scikit-image
+tqdm
