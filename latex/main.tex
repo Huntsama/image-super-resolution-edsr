@@ -52,7 +52,7 @@ In this project, we focus on learning-based super-resolution methods and impleme
 
 \medskip
 
-We implement the Enhanced Deep Residual Network (EDSR) architecture, which processes the low-resolution input directly and performs upsampling. The model learns to reconstruct high-frequency details from data. Our main objective is to correctly implement the full training and evaluation pipeline and analyze the effect of the model on both quantitative metrics and visual quality. We also tried to fix some bugs and apply some improvements for the second session exam.
+We implement the Enhanced Deep Residual Network (EDSR) architecture, which processes the low-resolution input directly and performs upsampling. The model learns to reconstruct high-frequency details from data. Our main objective is to correctly implement the full training and evaluation pipeline and analyze the effect of the model on both quantitative metrics and visual quality.
 
 We chose this task because, unlike classification, it requires the model to produce an entire
 image as output, which makes it far more sensitive to architectural choices and to how carefully
@@ -167,8 +167,7 @@ layer subtracts the average RGB values of the DIV2K dataset
 from the input image. By centering the data distribution around zero, the network can
 focus on learning structural patterns such as edges and textures instead of adapting to
 absolute brightness differences. This normalization helps stabilize training and leads to
-faster convergence. The layer holds the channel means as fixed constants and is never trained;
-in the first session it was left trainable by mistake, which is fix 9 in Section~\ref{sec:fixes}.
+faster convergence. The layer holds the channel means as fixed constants and is never trained.
 
 
 \subsubsection{Residual Blocks (ResBlock)}
@@ -231,84 +230,9 @@ with moderate batch sizes and allowed the EDSR model to be trained efficiently f
 the required number of epochs. The same experimental setup was used consistently
 across all experiments to ensure fair and reproducible results.
 
-\section{Improvements and Bug Fixes over the First Session}
-
-For the second session, we kept the model and the training recipe exactly the
-same as before (same architecture, same loss, same optimizer and number of
-epochs). We did this on purpose: if we had also changed the hyperparameters,
-we would not be able to tell if a change in the score came from a fix or from
-tuning. Instead, we went through the first-session code again and found
-several bugs, mostly in how the results were measured. We fixed the following
-issues:
-
-\subsection{Correctness Fixes}\label{sec:fixes}
-
-\begin{enumerate}
-  \item \textbf{We were choosing the model on the test set.} In the first
-  version, the best checkpoint was selected using the DIV2K validation
-  images, and then the final results were reported on the same images. This
-  means every number we reported was biased. Now we hold out 10 images from
-  the training set and use them only for validation and checkpoint selection.
-  The 100 official validation images are used as a test set and evaluated
-  only once, at the end.
-
-  \item \textbf{The Y-channel conversion was wrong.} We computed PSNR and
-  SSIM using the full-range BT.601 coefficients, but the super-resolution
-  literature uses the MATLAB \texttt{rgb2ycbcr} version. The difference is a
-  constant offset of about 1.32~dB, so our first-session PSNR values cannot
-  be directly compared with the corrected ones (the old 29.10~dB is around
-  30.42~dB on the corrected scale).
-
-  \item \textbf{We had two evaluation functions that did not agree.} The
-  validation during training removed a border equal to the scale factor (4 pixels) before computing the
-  metrics, but the final evaluation did not. So the training curves and the
-  results table were not measuring the same thing. We merged them into a
-  single evaluation function that is used everywhere.
-
-  \item \textbf{The bicubic baseline was not the right bicubic.} The DIV2K
-  low-resolution images were created with MATLAB \texttt{imresize}, which
-  uses a cubic kernel with $a=-0.5$ and applies antialiasing. Our baseline
-  used PyTorch interpolation, which uses $a=-0.75$ and no antialiasing. We
-  implemented the MATLAB-compatible version, so the baseline now actually
-  inverts the degradation that created the data.
-
-  \item \textbf{Nothing was seeded.} The first-session runs could not be
-  reproduced. Now all random generators are seeded, including the dataloader
-  workers, and the random state is saved in the checkpoints so a resumed run
-  behaves the same as an uninterrupted one.
-
-  \item \textbf{The self-ensemble never actually ran.} The $8\times$
-  geometric ensemble was implemented and described in the first report, but
-  the flag that enables it was set to \texttt{False} by default and nothing
-  ever turned it on. It is now evaluated properly and has its own row in the
-  results.
-
-  \item \textbf{The augmentation did not match the ensemble.} Training only
-  used horizontal and vertical flips, which cover 4 of the 8 symmetries of a
-  square, while the ensemble averages over all 8. We added the transpose so
-  the training covers all of them.
-
-  \item \textbf{The figures and the table used different PSNR.} The first
-  report plotted RGB PSNR next to a table with Y-channel PSNR, so the two
-  could not be compared. All reported values are now on the Y channel.
-
-  \item \textbf{The MeanShift layers were never actually frozen.} MeanShift is
-  meant to be a fixed normalization: it subtracts the DIV2K channel means at the
-  input and adds them back at the output, and its weights should never be
-  trained. We disabled its gradients with \texttt{self.requires\_grad = False},
-  but \texttt{nn.Module} has no \texttt{requires\_grad} property, so that line
-  simply created an unused attribute and the layer stayed trainable. The correct
-  form is \texttt{self.requires\_grad\_(False)}, or an explicit loop over
-  \texttt{self.parameters()}, which is what we now do. The effect is small, 24
-  parameters out of roughly 43 million, but it means our first-session
-  normalization constants drifted during training instead of staying fixed. The
-  same line appears in the widely used reference EDSR implementation, so this is
-  an inherited bug rather than one we introduced.
-\end{enumerate}
-
 \subsection{Code Structure and Reproducibility}
 
-We also restructured the code itself, so that anyone can check our results or repeat them.
+The code is structured so that anyone can check our results or repeat them.
 
 \medskip
 
@@ -484,9 +408,7 @@ improvement of \textbf{+5.31 dB} in PSNR (26.20 to 31.51 dB on the crop shown).}
 We implemented Single Image Super-Resolution with the EDSR architecture, following
 Lim et al.~\cite{lim2017}, and trained it for 100 epochs on the VUB ETRO GPU farm. On a test set
 held out until the final evaluation it reaches 30.41~dB Y-PSNR, against 28.09~dB for bicubic interpolation, and it wins on SSIM and LPIPS as well. The $8\times$ self-ensemble adds a
-further 0.07~dB at eight times the inference cost. The architecture and training recipe are
-unchanged from the first session by design: every difference in the numbers comes from a
-correction to how the data is split and how the results are measured, not from tuning.
+further 0.07~dB at eight times the inference cost.
 
 \subsection{Limitations and Observations}
 Our results come with a number of caveats, and one of our own measurements points the wrong way.
